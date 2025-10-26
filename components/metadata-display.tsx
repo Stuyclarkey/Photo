@@ -50,14 +50,14 @@ export function MetadataDisplay({ metadata }: MetadataDisplayProps) {
               <Tag className="h-5 w-5 text-blue-600" />
               Tags
             </span>
-            <Button variant="ghost" size="sm" onClick={() => copyToClipboard(metadata.tags.join(", "), "Tags")}>
+            <Button variant="ghost" size="sm" onClick={() => copyToClipboard((metadata.tags || []).join(", "), "Tags")}>
               <Copy className="h-4 w-4" />
             </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            {metadata.tags.map((tag, index) => (
+            {(metadata.tags || []).map((tag, index) => (
               <Badge
                 key={index}
                 variant="secondary"

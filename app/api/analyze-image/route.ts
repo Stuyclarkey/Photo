@@ -2,13 +2,24 @@ export async function POST(request: Request) {
   try {
     console.log("[v0] API request received")
 
-    const { imageUrl } = await request.json()
+    const { imageUrl, exifData } = await request.json()
 
     if (!imageUrl) {
       return Response.json({ error: "No image data provided" }, { status: 400 })
     }
 
     console.log("[v0] Making request to Groq API...")
+
+    let locationContext = ""
+    if (exifData?.gps) {
+      locationContext = `\n\nEXIF GPS Data Available:
+- Latitude: ${exifData.gps.latitude}
+- Longitude: ${exifData.gps.longitude}
+${exifData.gps.altitude ? `- Altitude: ${exifData.gps.altitude}m` : ""}
+${exifData.location ? `- Location from tags: ${exifData.location}` : ""}
+
+Please use these GPS coordinates as the primary location data and provide detailed historical and contextual information about this specific location.`
+    }
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -24,7 +35,9 @@ export async function POST(request: Request) {
             content: [
               {
                 type: "text",
-                text: `Analyze this image and extract metadata. Return a JSON object with the following structure:
+                text: `Analyze this image and extract comprehensive metadata including location data. ${locationContext}
+
+Return a JSON object with the following structure:
 {
   "title": "A descriptive title for the image",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
@@ -35,10 +48,23 @@ export async function POST(request: Request) {
   "what": "Main objects or activities",
   "where": "Location or setting description",
   "location": {
-    "name": "Specific location name if identifiable",
-    "description": "Description of the location"
+    "name": "Specific location name (e.g., 'Eiffel Tower, Paris, France' or 'Bristol, England')",
+    "coordinates": {
+      "lat": ${exifData?.gps?.latitude || "null"},
+      "lng": ${exifData?.gps?.longitude || "null"}
+    },
+    "description": "Detailed description of the location based on visual cues and GPS data",
+    "history": "Comprehensive historical information about this location, including: founding/establishment dates, significant historical events, cultural importance, architectural history, notable figures associated with the location, and how it has evolved over time",
+    "context": "Rich current information about the area, including: what it's known for today, major tourist attractions nearby, local culture and traditions, current events or festivals, interesting facts, and why people visit this location"
   }
 }
+
+IMPORTANT: 
+- Use the provided GPS coordinates if available
+- If you can identify the location from landmarks, architecture, signs, or other visual cues, provide specific details
+- Include comprehensive historical information (at least 3-4 sentences)
+- Provide rich contextual information about the current state of the area (at least 3-4 sentences)
+- If location cannot be determined, provide general information based on the setting type (urban, rural, etc.)
 
 Only return the JSON object, no additional text.`,
               },
@@ -51,7 +77,7 @@ Only return the JSON object, no additional text.`,
             ],
           },
         ],
-        max_tokens: 1000,
+        max_tokens: 2500,
         temperature: 0.3,
       }),
     })
@@ -97,15 +123,26 @@ Only return the JSON object, no additional text.`,
 
     // Try to parse the JSON response from Groq
     try {
-      const metadata = JSON.parse(content)
+      let jsonContent = content.trim()
+
+      // Remove markdown code blocks if present
+      if (jsonContent.startsWith("```")) {
+        // Remove opening \`\`\`json or \`\`\` and closing \`\`\`
+        jsonContent = jsonContent
+          .replace(/^```(?:json)?\n?/, "")
+          .replace(/\n?```$/, "")
+          .trim()
+      }
+
+      const metadata = JSON.parse(jsonContent)
       console.log("[v0] Successfully parsed metadata")
       return Response.json({ metadata })
     } catch (parseError) {
       console.log("[v0] Failed to parse Groq response as JSON:", content)
-      // Return fallback metadata if JSON parsing fails
       return Response.json({
         metadata: {
           title: "Image Analysis",
+          tags: ["image", "analysis", "metadata"],
           summary: content,
           altText: "Image description for screen readers",
           caption: "Image caption for social media",
@@ -114,7 +151,13 @@ Only return the JSON object, no additional text.`,
           where: "Unknown",
           location: {
             name: "Unknown",
+            coordinates: {
+              lat: null,
+              lng: null,
+            },
             description: "Unknown",
+            history: "Unknown",
+            context: "Unknown",
           },
         },
       })

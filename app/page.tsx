@@ -27,13 +27,15 @@ export interface ImageMetadata {
 
 export default function Home() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
+  const [exifData, setExifData] = useState<any>(null)
   const [metadata, setMetadata] = useState<ImageMetadata | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [showLocationInfo, setShowLocationInfo] = useState(false)
   const [showEtsyGenerator, setShowEtsyGenerator] = useState(false)
 
-  const handleImageUpload = (imageUrl: string) => {
+  const handleImageUpload = (imageUrl: string, exif?: any) => {
     setUploadedImage(imageUrl)
+    setExifData(exif)
     setMetadata(null)
     setShowLocationInfo(false)
     setShowEtsyGenerator(false)
@@ -51,7 +53,10 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ imageUrl: uploadedImage }),
+        body: JSON.stringify({
+          imageUrl: uploadedImage,
+          exifData: exifData,
+        }),
       })
 
       console.log("[v0] Response status:", response.status)
